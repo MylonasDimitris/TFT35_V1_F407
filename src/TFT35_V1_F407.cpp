@@ -29,7 +29,8 @@ void TFT35_V1_F407::setWindow(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2
 }
 
 void TFT35_V1_F407::fillScreen(uint16_t color) {
-    setWindow(0, 0, 319, 479);
+    // Alternatively, you can just use: setWindow(0, 0, WIDTH - 1, HEIGHT - 1);
+    setWindow(0, 0, 479, 319); 
     for(uint32_t i=0; i<153600; i++) {
         LCD_DAT = color;
     }
@@ -63,7 +64,7 @@ void TFT35_V1_F407::initFSMC() {
 void TFT35_V1_F407::initLCD() {
     LCD_REG = 0x11; delay(150);
     LCD_REG = 0x3A; LCD_DAT = 0x55;
-    LCD_REG = 0x36; LCD_DAT = 0x28; // BGR orientation
+    LCD_REG = 0x36; LCD_DAT = 0x28; // BGR orientation (Landscape)
     LCD_REG = 0x29; delay(100);
 }
 
@@ -84,7 +85,7 @@ bool TFT35_V1_F407::isDMAReady() {
     return (DMA2->LISR & (1 << 5));
 }
 
-// --- NEW: Internal SD and Video Pipeline ---
+// --- Internal SD and Video Pipeline ---
 
 bool TFT35_V1_F407::initSD() {
     return sd.begin(SD_CS, SD_SCK_MHZ(50));
@@ -117,6 +118,9 @@ void TFT35_V1_F407::playVideo(const char* filename) {
             sendBufferDMA(targetBuffer, PIXELS_PER_BLOCK);
             dmaBufIdx = 1 - dmaBufIdx;
         }
+        
+        // Prevents the CPU from sending the next setWindow command prematurely.
+        while(!isDMAReady());
         
         // 3. Skip 0xAA55 sync marker
         animFile.seekCur(2);
