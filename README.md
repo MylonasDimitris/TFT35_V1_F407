@@ -18,7 +18,8 @@ Because this setup requires almost no CPU time to run the display, it is perfect
 ### ST-Link Programming Connection
 To flash new firmware to the onboard STM32F407VET6, you will need to solder standard header pins to the SWD debug pads located on the board. Connect an **ST-Link V2** programmer to these pins (`3.3V`, `GND`, `SWDIO`, `SWCLK`) to upload your code via the Arduino IDE.
 
-![ST-Link Soldering Example](insert_your_image_link_here.jpg)
+![ST-Link Soldering Example](https://github.com/user-attachments/assets/bf0ebb41-29d5-457e-a98e-fb82bdc05dc3)
+
 
 ### Internal Pin Routing
 The library is hardcoded to the internal routing of the standard TFT35 V1.0 board:
