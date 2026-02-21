@@ -45,4 +45,5 @@ private:
     uint16_t colorBuffer[2][PIXELS_PER_BLOCK];
 };
 
+
 #endif
