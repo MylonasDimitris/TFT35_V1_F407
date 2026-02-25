@@ -8,6 +8,7 @@ void touchInterrupt() {
 }
 
 TFT35_V1_F407::TFT35_V1_F407() {
+    _touchLockTime = 0;
 }
 
 void TFT35_V1_F407::begin() {
@@ -98,6 +99,10 @@ bool TFT35_V1_F407::openVideo(const char* filename) {
     return animFile.open(filename, O_READ);
 }
 
+void TFT35_V1_F407::lockTouch(uint16_t milliseconds) {
+    _touchLockTime = millis() + milliseconds;
+}
+
 bool TFT35_V1_F407::isTouched() {
     return (digitalRead(TOUCH_IRQ) == LOW);
 }
@@ -157,6 +162,9 @@ static uint16_t readTouchData(uint8_t command) {
 
 
 bool TFT35_V1_F407::getTouchCoordinates(uint16_t *x, uint16_t *y) {
+    // --- THE INVULNERABILITY SHIELD ---
+    if (millis() < _touchLockTime) return false;
+
     if (!isTouched()) return false; 
 
     digitalWrite(SD_CS, HIGH);

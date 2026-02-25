@@ -43,12 +43,14 @@ public:
     void initTouch();
     bool isTouched();
     bool getTouchCoordinates(uint16_t *x, uint16_t *y);
+    void lockTouch(uint16_t milliseconds);
 
 private:
     void initFSMC();
     void initLCD();
     void sendBufferDMA(uint16_t* source, uint32_t len);
     bool isDMAReady();
+    unsigned long _touchLockTime;
 
     SdFat sd;
     File animFile;
