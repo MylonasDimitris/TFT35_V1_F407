@@ -116,7 +116,6 @@ void TFT35_V1_F407::initTouch() {
     pinMode(TOUCH_IRQ, INPUT_PULLUP); 
 }
 
-// --- THE PHYSICS-AWARE BIT-BANGER ---
 static uint16_t readTouchData(uint8_t command) {
     for (int i = 0; i < 8; i++) {
         digitalWrite(TOUCH_MOSI, (command & 0x80) ? HIGH : LOW);
@@ -127,24 +126,27 @@ static uint16_t readTouchData(uint8_t command) {
     digitalWrite(TOUCH_MOSI, LOW);
     digitalWrite(TOUCH_SCK, LOW);
     
-    // Physics fix: Wait for the analog voltage to travel across the glass!
+    // Wait for the analog voltage to travel across the glass
     delayMicroseconds(15); 
     
+    // Pulse the BUSY clock
     digitalWrite(TOUCH_SCK, HIGH); delayMicroseconds(1);
     digitalWrite(TOUCH_SCK, LOW);  delayMicroseconds(1);
+    
 
     uint16_t result = 0;
     for (int i = 0; i < 12; i++) {
-        digitalWrite(TOUCH_SCK, HIGH); delayMicroseconds(1);
-        digitalWrite(TOUCH_SCK, LOW);  
-        
+        // READ THE BIT FIRST!
         result <<= 1;
         if (digitalRead(TOUCH_MISO) == HIGH) {
             result |= 1;
         }
-        delayMicroseconds(1);
+        
+        digitalWrite(TOUCH_SCK, HIGH); delayMicroseconds(1);
+        digitalWrite(TOUCH_SCK, LOW);  delayMicroseconds(1);
     }
 
+    // Clear the remaining 3 empty clock cycles
     for (int i = 0; i < 3; i++) {
         digitalWrite(TOUCH_SCK, HIGH); delayMicroseconds(1);
         digitalWrite(TOUCH_SCK, LOW);  delayMicroseconds(1);
@@ -152,6 +154,7 @@ static uint16_t readTouchData(uint8_t command) {
     
     return result; 
 }
+
 
 bool TFT35_V1_F407::getTouchCoordinates(uint16_t *x, uint16_t *y) {
     if (!isTouched()) return false; 
@@ -162,20 +165,25 @@ bool TFT35_V1_F407::getTouchCoordinates(uint16_t *x, uint16_t *y) {
     digitalWrite(TOUCH_CS, LOW); // WAKE UP U4!
     delayMicroseconds(5); 
 
-    // Read X & Y
+    // Read raw data
     uint16_t rawX = readTouchData(0xD0);
     uint16_t rawY = readTouchData(0x90);
 
     digitalWrite(TOUCH_CS, HIGH); // PUT U4 TO SLEEP!
 
     // Noise filter
-    if (rawX == 0 || rawX > 4090 || rawY == 0 || rawY > 4090) return false;
+    if (rawX < 100 || rawX > 4090 || rawY < 100 || rawY > 4090) return false;
 
-    // Map to screen pixels 
-    // NOTE: Depending on how the glass is glued on, you might need to swap the 3800 and 200 
-    // to invert the axis so the touch perfectly tracks your finger!
-    *x = map(rawX, 200, 3800, 0, 480);
-    *y = map(rawY, 200, 3800, 0, 320);
+    // The Constrain Lock
+    rawX = constrain(rawX, 200, 3900);
+    rawY = constrain(rawY, 200, 3900);
+    
+    // If an axis is backwards, just swap the 3900 and the 200
+    long mappedX = map(rawY, 3900, 200, 0, 480);
+    long mappedY = map(rawX, 200, 3900, 0, 320); 
+
+    *x = mappedX;
+    *y = mappedY;
 
     return true;
 }
@@ -208,7 +216,6 @@ bool TFT35_V1_F407::playFrame() {
     
     while(!isDMAReady());
     
-    // The Anti-LSD Mathematical Anchor
     animFile.seekSet(frameStartPos + 154114);
     return true; 
 }
