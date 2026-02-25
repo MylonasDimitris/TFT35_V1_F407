@@ -159,26 +159,40 @@ static uint16_t readTouchData(uint8_t command) {
 bool TFT35_V1_F407::getTouchCoordinates(uint16_t *x, uint16_t *y) {
     if (!isTouched()) return false; 
 
-    // Shield the SD card
     digitalWrite(SD_CS, HIGH);
-    
-    digitalWrite(TOUCH_CS, LOW); // WAKE UP U4!
+    digitalWrite(TOUCH_CS, LOW); 
     delayMicroseconds(5); 
 
-    // Read raw data
-    uint16_t rawX = readTouchData(0xD0);
-    uint16_t rawY = readTouchData(0x90);
+    // --- 1. TAKE TWO SAMPLES ---
+    uint16_t rawX1 = readTouchData(0xD0);
+    uint16_t rawY1 = readTouchData(0x90);
+    
+    uint16_t rawX2 = readTouchData(0xD0);
+    uint16_t rawY2 = readTouchData(0x90);
 
-    digitalWrite(TOUCH_CS, HIGH); // PUT U4 TO SLEEP!
+    digitalWrite(TOUCH_CS, HIGH); 
 
-    // Noise filter
-    if (rawX < 100 || rawX > 4090 || rawY < 100 || rawY > 4090) return false;
+    // Basic Noise filter
+    if (rawX1 < 100 || rawX1 > 4090 || rawY1 < 100 || rawY1 > 4090) return false;
 
-    // The Constrain Lock
+    // --- 2. THE LIFT-OFF DRIFT FILTER ---
+    // Calculate the difference between the two samples
+    int diffX = (int)rawX1 - (int)rawX2;
+    int diffY = (int)rawY1 - (int)rawY2;
+    
+    // If the coordinates jumped by more than 50 raw points in one microsecond, 
+    // your finger is lifting off! Discard the garbage data.
+    if (abs(diffX) > 50 || abs(diffY) > 50) return false;
+
+    // Use the first stable reading
+    uint16_t rawX = rawX1;
+    uint16_t rawY = rawY1;
+
+    // Constrain Lock
     rawX = constrain(rawX, 200, 3900);
     rawY = constrain(rawY, 200, 3900);
     
-    // If an axis is backwards, just swap the 3900 and the 200
+    // Full Resolution Map
     long mappedX = map(rawY, 3900, 200, 0, 480);
     long mappedY = map(rawX, 200, 3900, 0, 320); 
 
