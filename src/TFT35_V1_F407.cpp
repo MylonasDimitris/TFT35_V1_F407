@@ -1,5 +1,12 @@
 #include "TFT35_V1_F407.h"
 
+volatile bool screenTapped = false;
+uint32_t actualTouchCS = 0xFFFFFFFF; 
+
+void touchInterrupt() {
+    screenTapped = true; 
+}
+
 TFT35_V1_F407::TFT35_V1_F407() {
 }
 
@@ -12,12 +19,6 @@ void TFT35_V1_F407::begin() {
     pinMode(L_BL_ALT, OUTPUT); 
     digitalWrite(L_BL_ALT, HIGH);
     
-    pinMode(L_RST, OUTPUT);
-    digitalWrite(L_RST, LOW); 
-    delay(200); 
-    digitalWrite(L_RST, HIGH); 
-    delay(200);
-
     initLCD();
 }
 
@@ -29,7 +30,6 @@ void TFT35_V1_F407::setWindow(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2
 }
 
 void TFT35_V1_F407::fillScreen(uint16_t color) {
-    // Alternatively, you can just use: setWindow(0, 0, WIDTH - 1, HEIGHT - 1);
     setWindow(0, 0, 479, 319); 
     for(uint32_t i=0; i<153600; i++) {
         LCD_DAT = color;
@@ -91,40 +91,124 @@ bool TFT35_V1_F407::initSD() {
     return sd.begin(SD_CS, SD_SCK_MHZ(50));
 }
 
-void TFT35_V1_F407::playVideo(const char* filename) {
-    if (!animFile.open(filename, O_READ)) {
-        return; 
+bool TFT35_V1_F407::openVideo(const char* filename) {
+    if (animFile.isOpen()) {
+        animFile.close(); 
+    }
+    return animFile.open(filename, O_READ);
+}
+
+bool TFT35_V1_F407::isTouched() {
+    return (digitalRead(TOUCH_IRQ) == LOW);
+}
+
+void TFT35_V1_F407::initTouch() {
+    pinMode(TOUCH_CS, OUTPUT);
+    digitalWrite(TOUCH_CS, HIGH); // Put touch chip to sleep
+    
+    pinMode(TOUCH_SCK, OUTPUT);
+    digitalWrite(TOUCH_SCK, LOW);
+    
+    pinMode(TOUCH_MOSI, OUTPUT);
+    digitalWrite(TOUCH_MOSI, LOW);
+    
+    pinMode(TOUCH_MISO, INPUT);
+    pinMode(TOUCH_IRQ, INPUT_PULLUP); 
+}
+
+// --- THE PHYSICS-AWARE BIT-BANGER ---
+static uint16_t readTouchData(uint8_t command) {
+    for (int i = 0; i < 8; i++) {
+        digitalWrite(TOUCH_MOSI, (command & 0x80) ? HIGH : LOW);
+        command <<= 1;
+        digitalWrite(TOUCH_SCK, LOW);  delayMicroseconds(1);
+        digitalWrite(TOUCH_SCK, HIGH); delayMicroseconds(1);
+    }
+    digitalWrite(TOUCH_MOSI, LOW);
+    digitalWrite(TOUCH_SCK, LOW);
+    
+    // Physics fix: Wait for the analog voltage to travel across the glass!
+    delayMicroseconds(15); 
+    
+    digitalWrite(TOUCH_SCK, HIGH); delayMicroseconds(1);
+    digitalWrite(TOUCH_SCK, LOW);  delayMicroseconds(1);
+
+    uint16_t result = 0;
+    for (int i = 0; i < 12; i++) {
+        digitalWrite(TOUCH_SCK, HIGH); delayMicroseconds(1);
+        digitalWrite(TOUCH_SCK, LOW);  
+        
+        result <<= 1;
+        if (digitalRead(TOUCH_MISO) == HIGH) {
+            result |= 1;
+        }
+        delayMicroseconds(1);
     }
 
-    while (animFile.available()) {
-        // 1. Read Palette
-        if (animFile.read(framePalette, 512) != 512) break;
-        
-        setWindow(0, 0, WIDTH - 1, HEIGHT - 1);
-        uint8_t dmaBufIdx = 0;
-        
-        // 2. Process frame in blocks
-        for (int y = 0; y < HEIGHT; y += LINES_PER_BLOCK) {
-            animFile.read(indexedBuffer, PIXELS_PER_BLOCK);
-            
-            uint16_t* targetBuffer = colorBuffer[dmaBufIdx];
-            for (int i = 0; i < PIXELS_PER_BLOCK; i++) {
-                targetBuffer[i] = framePalette[indexedBuffer[i]];
-            }
-
-            // Wait for previous DMA block to finish pushing to the screen
-            while(y > 0 && !isDMAReady());
-            
-            sendBufferDMA(targetBuffer, PIXELS_PER_BLOCK);
-            dmaBufIdx = 1 - dmaBufIdx;
-        }
-        
-        // Prevents the CPU from sending the next setWindow command prematurely.
-        while(!isDMAReady());
-        
-        // 3. Skip 0xAA55 sync marker
-        animFile.seekCur(2);
+    for (int i = 0; i < 3; i++) {
+        digitalWrite(TOUCH_SCK, HIGH); delayMicroseconds(1);
+        digitalWrite(TOUCH_SCK, LOW);  delayMicroseconds(1);
     }
     
-    animFile.close();
+    return result; 
+}
+
+bool TFT35_V1_F407::getTouchCoordinates(uint16_t *x, uint16_t *y) {
+    if (!isTouched()) return false; 
+
+    // Shield the SD card
+    digitalWrite(SD_CS, HIGH);
+    
+    digitalWrite(TOUCH_CS, LOW); // WAKE UP U4!
+    delayMicroseconds(5); 
+
+    // Read X & Y
+    uint16_t rawX = readTouchData(0xD0);
+    uint16_t rawY = readTouchData(0x90);
+
+    digitalWrite(TOUCH_CS, HIGH); // PUT U4 TO SLEEP!
+
+    // Noise filter
+    if (rawX == 0 || rawX > 4090 || rawY == 0 || rawY > 4090) return false;
+
+    // Map to screen pixels 
+    // NOTE: Depending on how the glass is glued on, you might need to swap the 3800 and 200 
+    // to invert the axis so the touch perfectly tracks your finger!
+    *x = map(rawX, 200, 3800, 0, 480);
+    *y = map(rawY, 200, 3800, 0, 320);
+
+    return true;
+}
+
+bool TFT35_V1_F407::playFrame() {
+    if (!animFile.isOpen() || animFile.available() < 154114) {
+        animFile.close();
+        return false; 
+    }
+
+    uint32_t frameStartPos = animFile.curPosition();
+
+    if (animFile.read(framePalette, 512) != 512) return false;
+    
+    setWindow(0, 0, WIDTH - 1, HEIGHT - 1);
+    uint8_t dmaBufIdx = 0;
+    
+    for (int y = 0; y < HEIGHT; y += LINES_PER_BLOCK) {
+        if (animFile.read(indexedBuffer, PIXELS_PER_BLOCK) != PIXELS_PER_BLOCK) return false;
+        
+        uint16_t* targetBuffer = colorBuffer[dmaBufIdx];
+        for (int i = 0; i < PIXELS_PER_BLOCK; i++) {
+            targetBuffer[i] = framePalette[indexedBuffer[i]];
+        }
+
+        while(y > 0 && !isDMAReady());
+        sendBufferDMA(targetBuffer, PIXELS_PER_BLOCK);
+        dmaBufIdx = 1 - dmaBufIdx;
+    }
+    
+    while(!isDMAReady());
+    
+    // The Anti-LSD Mathematical Anchor
+    animFile.seekSet(frameStartPos + 154114);
+    return true; 
 }
