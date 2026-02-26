@@ -1,5 +1,10 @@
 # TFT35_V1_F407 UI & Graphics Library
 
+![Status: WIP](https://img.shields.io/badge/Status-Work_In_Progress-orange?style=flat-square)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
+
+> **Note:** This library is currently a **Work In Progress**. The core hardware drivers (FSMC/DMA) and UI widgets are functional, but documentation and additional examples are still being added.
+
 A high-performance graphics and UI framework for STM32F407VET6 microcontrollers driving 3.5" TFT displays (ILI9486/ILI9488). The library utilizes hardware-level optimizations including **FSMC (Flexible Static Memory Controller)** and **DMA (Direct Memory Access)** to achieve high-speed rendering and fluid video playback.
 
 ---
