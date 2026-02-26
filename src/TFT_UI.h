@@ -46,7 +46,8 @@ class TFT_Button {
 public:
     TFT_Button();
     void init(TFT_UI* ui, uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
-              uint16_t color, uint16_t textColor, const char* label, ButtonCallback callback);
+            uint16_t color, uint16_t textColor, const char* label, 
+            uint8_t textSize, ButtonCallback callback);
     void draw();
     bool checkTouch(uint16_t touchX, uint16_t touchY);
     void setColor(uint16_t color);
@@ -56,6 +57,28 @@ private:
     uint16_t _x, _y, _w, _h;
     uint16_t _color, _textColor;
     const char* _label;
+    uint8_t _textSize;
+    ButtonCallback _action;
+    unsigned long _lastPressTime;
+};
+
+// --- IMAGE BUTTON (SD CARD GRAPHICS) ---
+class TFT_ImageButton {
+public:
+    TFT_ImageButton();
+    
+    // Notice we pass the raw hardware driver (tft) so it can access the SD card!
+    void init(TFT35_V1_F407* tft, TFT_UI* ui, uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
+              const char* filename, ButtonCallback callback);
+              
+    void draw();
+    bool checkTouch(uint16_t touchX, uint16_t touchY);
+
+private:
+    TFT35_V1_F407* _tft;
+    TFT_UI* _ui;
+    uint16_t _x, _y, _w, _h;
+    const char* _filename;
     ButtonCallback _action;
     unsigned long _lastPressTime;
 };
@@ -65,8 +88,9 @@ class TFT_Toggle {
 public:
     TFT_Toggle();
     void init(TFT_UI* ui, uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
-              uint16_t colorOn, uint16_t colorOff, uint16_t textColor, 
-              const char* labelOn, const char* labelOff, ButtonCallback callback);
+            uint16_t colorOn, uint16_t colorOff, uint16_t textColor, 
+            const char* labelOn, const char* labelOff, 
+            uint8_t textSize, ButtonCallback callback);
     void draw();
     bool checkTouch(uint16_t touchX, uint16_t touchY);
     bool getState();
@@ -77,6 +101,7 @@ private:
     uint16_t _colorOn, _colorOff, _textColor;
     const char* _labelOn;
     const char* _labelOff;
+    uint8_t _textSize;
     ButtonCallback _action;
     unsigned long _lastPressTime;
     bool _state; 

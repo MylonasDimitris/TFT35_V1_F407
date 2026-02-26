@@ -241,3 +241,142 @@ bool TFT35_V1_F407::playFrame() {
     animFile.seekSet(frameStartPos + 154114);
     return true; 
 }
+
+
+// Helper functions to read Little-Endian bytes from the SD Card
+static uint16_t read16(File& f) {
+    uint16_t result;
+    f.read(&result, 2);
+    return result;
+}
+
+static uint32_t read32(File& f) {
+    uint32_t result;
+    f.read(&result, 4);
+    return result;
+}
+
+bool TFT35_V1_F407::drawBMP(const char* filename, int16_t x, int16_t y) {
+    File bmpFile;
+    
+    if (!sd.exists(filename)) return false;
+    bmpFile = sd.open(filename, O_READ);
+    if (!bmpFile) return false;
+
+    // Check the BMP signature (Must be 'B' 'M')
+    if (read16(bmpFile) != 0x4D42) {
+        bmpFile.close();
+        return false;
+    }
+
+    // Skip File Size (4), Creator Bytes (4)
+    bmpFile.seek(10);
+    
+    // Read the offset to the actual image pixels
+    uint32_t imageOffset = read32(bmpFile);
+    
+    // Skip Header Size
+    bmpFile.seek(18);
+    
+    int32_t bmpWidth = read32(bmpFile);
+    int32_t bmpHeight = read32(bmpFile);
+    
+    // Skip Color Planes
+    bmpFile.seek(28); 
+    uint16_t bitDepth = read16(bmpFile);
+    
+    // We only support standard 24-bit color BMPs
+    if (bitDepth != 24) {
+        bmpFile.close();
+        return false;
+    }
+
+    // Determine if the image is stored bottom-to-top or top-to-bottom
+    bool flip = true;
+    if (bmpHeight < 0) {
+        bmpHeight = -bmpHeight;
+        flip = false;
+    }
+
+    // Crop the image if it goes off the screen boundaries
+    int32_t drawWidth = bmpWidth;
+    int32_t drawHeight = bmpHeight;
+    
+    if (x + drawWidth > WIDTH) drawWidth = WIDTH - x;
+    if (y + drawHeight > HEIGHT) drawHeight = HEIGHT - y;
+
+    // BMP rows are padded to a multiple of 4 bytes. Calculate the true row size.
+    uint32_t rowSize = (bmpWidth * 3 + 3) & ~3;
+    
+    // Allocate a buffer in RAM to read an entire row at once (Fastest method!)
+    uint8_t sdbuffer[rowSize]; 
+
+    // Draw the image row by row
+    for (int row = 0; row < drawHeight; row++) {
+        
+        // Calculate the physical Y position on the LCD
+        int drawY = y + (flip ? (bmpHeight - 1 - row) : row);
+        
+        // Skip rows that are outside the physical screen
+        if (drawY >= HEIGHT || drawY < 0) continue;
+
+        // Move the SD card reader to the start of this specific row
+        bmpFile.seek(imageOffset + (row * rowSize));
+        bmpFile.read(sdbuffer, rowSize);
+
+        // Tell the LCD where to put the pixels
+        setWindow(x, drawY, x + drawWidth - 1, drawY);
+
+        // Translate the 24-bit RGB values to 16-bit LCD values
+        uint32_t bufferIndex = 0;
+        for (int col = 0; col < drawWidth; col++) {
+            uint8_t b = sdbuffer[bufferIndex++];
+            uint8_t g = sdbuffer[bufferIndex++];
+            uint8_t r = sdbuffer[bufferIndex++];
+            
+            // Push directly to the FSMC data register
+            LCD_DAT = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+        }
+    }
+
+    bmpFile.close();
+    return true;
+}
+
+bool TFT35_V1_F407::drawRAW(const char* filename, int16_t x, int16_t y, int16_t w, int16_t h) {
+    if (!sd.exists(filename)) return false;
+    File rawFile = sd.open(filename, O_READ);
+    if (!rawFile) return false;
+
+    // Crop if it goes off the screen
+    int16_t drawW = w;
+    int16_t drawH = h;
+    if (x + w > WIDTH) drawW = WIDTH - x;
+    if (y + h > HEIGHT) drawH = HEIGHT - y;
+
+    // Tell the LCD exactly where this block of pixels is going
+    setWindow(x, y, x + drawW - 1, y + drawH - 1);
+
+    // Buffer 512 bytes (256 pixels) at a time for maximum SD card read speed
+    uint8_t buf[512]; 
+    uint32_t totalPixels = drawW * drawH;
+    uint32_t pixelsRead = 0;
+
+    while (pixelsRead < totalPixels) {
+        int bytesToRead = (totalPixels - pixelsRead) * 2; // 2 bytes per pixel
+        if (bytesToRead > 512) bytesToRead = 512;
+        
+        int bytesRead = rawFile.read(buf, bytesToRead);
+        if (bytesRead == 0) break; // End of file reached early
+        
+        // Blast the reconstructed 16-bit colors directly to the FSMC register
+        for (int i = 0; i < bytesRead; i += 2) {
+            uint16_t color = buf[i] | (buf[i+1] << 8); // Little-Endian reconstruction
+            LCD_DAT = color;
+        }
+        pixelsRead += (bytesRead / 2);
+    }
+    
+    rawFile.close();
+    return true;
+}

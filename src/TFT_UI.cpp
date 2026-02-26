@@ -208,7 +208,8 @@ TFT_Button::TFT_Button() {
 }
 
 void TFT_Button::init(TFT_UI* ui, uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
-                      uint16_t color, uint16_t textColor, const char* label, ButtonCallback callback) {
+                      uint16_t color, uint16_t textColor, const char* label, 
+                      uint8_t textSize, ButtonCallback callback) {
     _ui = ui; 
     _x = x; 
     _y = y; 
@@ -217,6 +218,7 @@ void TFT_Button::init(TFT_UI* ui, uint16_t x, uint16_t y, uint16_t w, uint16_t h
     _color = color; 
     _textColor = textColor; 
     _label = label; 
+    _textSize = textSize; 
     _action = callback;
 }
 
@@ -231,25 +233,28 @@ void TFT_Button::setLabel(const char* label) {
 }
 
 void TFT_Button::draw() {
-    if (!_ui) return;
+    if (!_ui) {
+        return;
+    }
     
-    // Draw background
+    // 1. Draw the button background
     _ui->fillRect(_x, _y, _w, _h, _color);
-    
-    // Calculate text centering
-    uint8_t sz = 3; 
-    uint16_t tw = 0; 
+
+    // 2. Calculate centering based on the dynamic text size
+    uint16_t tw = 0;
     const char* c = _label;
     
-    while (*c) {
-        tw += (6 * sz);
-        c++;
+    // Each character is 6 pixels wide (5 pixels + 1 spacer) multiplied by scale
+    while (*c) { 
+        tw += (6 * _textSize); 
+        c++; 
     } 
     
     uint16_t textX = _x + (_w - tw) / 2;
-    uint16_t textY = _y + (_h - (8 * sz)) / 2;
-    
-    _ui->drawString(textX, textY, _label, _textColor, _color, sz);
+    uint16_t textY = _y + (_h - (8 * _textSize)) / 2; 
+
+    // 3. Draw the text string centered
+    _ui->drawString(textX, textY, _label, _textColor, _color, _textSize);
 }
 
 bool TFT_Button::checkTouch(uint16_t tx, uint16_t ty) {
@@ -285,42 +290,49 @@ TFT_Toggle::TFT_Toggle() {
 }
 
 void TFT_Toggle::init(TFT_UI* ui, uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
-                      uint16_t cOn, uint16_t cOff, uint16_t tc, 
-                      const char* lOn, const char* lOff, ButtonCallback cb) {
+                      uint16_t colorOn, uint16_t colorOff, uint16_t textColor, 
+                      const char* labelOn, const char* labelOff, 
+                      uint8_t textSize, ButtonCallback callback) {
     _ui = ui; 
     _x = x; 
     _y = y; 
     _w = w; 
     _h = h; 
-    _colorOn = cOn; 
-    _colorOff = cOff; 
-    _textColor = tc; 
-    _labelOn = lOn; 
-    _labelOff = lOff; 
-    _action = cb;
+    _colorOn = colorOn; 
+    _colorOff = colorOff; 
+    _textColor = textColor; 
+    _labelOn = labelOn; 
+    _labelOff = labelOff; 
+    _textSize = textSize; 
+    _action = callback;
 }
 
 void TFT_Toggle::draw() {
-    if (!_ui) return;
+    if (!_ui) {
+        return;
+    }
     
+    // 1. Determine current color and label based on state
     uint16_t cc = _state ? _colorOn : _colorOff;
     const char* cl = _state ? _labelOn : _labelOff;
-    
+
+    // 2. Draw the background
     _ui->fillRect(_x, _y, _w, _h, cc);
-    
-    uint8_t sz = 3; 
-    uint16_t tw = 0; 
+
+    // 3. Calculate text centering
+    uint16_t tw = 0;
     const char* c = cl;
     
-    while (*c) {
-        tw += (6 * sz);
-        c++;
+    while (*c) { 
+        tw += (6 * _textSize); 
+        c++; 
     } 
     
     uint16_t textX = _x + (_w - tw) / 2;
-    uint16_t textY = _y + (_h - (8 * sz)) / 2;
-    
-    _ui->drawString(textX, textY, cl, _textColor, cc, sz);
+    uint16_t textY = _y + (_h - (8 * _textSize)) / 2; 
+
+    // 4. Draw the label
+    _ui->drawString(textX, textY, cl, _textColor, cc, _textSize);
 }
 
 bool TFT_Toggle::getState() { 
@@ -376,7 +388,17 @@ void TFT_ProgressBar::init(TFT_UI* ui, uint16_t x, uint16_t y, uint16_t w, uint1
 }
 
 void TFT_ProgressBar::draw() { 
-    setValue(_currentVal); 
+    if (!_ui) return;
+    
+    // Force a complete redraw (bypassing the speed optimization in setValue)
+    uint16_t fillWidth = (uint16_t)(((_currentVal - _minVal) / (_maxVal - _minVal)) * _w);
+    
+    if (fillWidth > 0) {
+        _ui->fillRect(_x, _y, fillWidth, _h, _barColor);
+    }
+    if (fillWidth < _w) {
+        _ui->fillRect(_x + fillWidth, _y, _w - fillWidth, _h, _bgColor);
+    }
 }
 
 float TFT_ProgressBar::getValue() { 
@@ -408,21 +430,89 @@ void TFT_ProgressBar::setValue(float val) {
 }
 
 bool TFT_ProgressBar::checkTouch(uint16_t touchX, uint16_t touchY) {
-    // We add a +20 pixel "fat finger" hitbox above and below the slider to make it easy to grab!
-    if (touchX >= _x && touchX <= (_x + _w) && touchY >= (_y - 20) && touchY <= (_y + _h + 20)) {
+    // Basic hit-box (with +20px fat finger allowance)
+    bool inBounds = (touchX >= _x && touchX <= (_x + _w) && touchY >= (_y - 20) && touchY <= (_y + _h + 20));
+    
+    // DRAG LOCK: If touched inside, OR if we were just dragging it 150ms ago, lock on!
+    if (inBounds || (millis() - _lastTouchTime < 150)) {
         
-        // Calculate the physical percentage of where they touched
-        float percentage = (float)(touchX - _x) / (float)_w;
-        float newVal = _minVal + (percentage * (_maxVal - _minVal));
+        // Debounce the physical hardware action, but allow the visual drag to be instant
+        bool shouldTriggerAction = (millis() - _lastTouchTime > 50);
+        _lastTouchTime = millis(); // Refresh the Drag-Lock timer!
         
-        setValue(newVal); // Instantly redraws the drag line
+        // Calculate percentage (Allow math to go outside physical X boundaries while dragging)
+        float percentage = (float)((int16_t)touchX - (int16_t)_x) / (float)_w;
+        if (percentage < 0.0) percentage = 0.0;
+        if (percentage > 1.0) percentage = 1.0;
+        
+        setValue(_minVal + (percentage * (_maxVal - _minVal))); // Visually redraw
 
-        // Debounce the callback trigger slightly so it doesn't crash external tasks
-        if (_action != nullptr && (millis() - _lastTouchTime > 50)) {
-            _lastTouchTime = millis();
+        if (_action != nullptr && shouldTriggerAction) {
             _action();
         }
-        return true;
+        return true; // We consume the touch!
     }
+    return false;
+}
+
+TFT_ImageButton::TFT_ImageButton() { 
+    _tft = nullptr;
+    _ui = nullptr; 
+    _action = nullptr; 
+    _lastPressTime = 0; 
+}
+
+void TFT_ImageButton::init(TFT35_V1_F407* tft, TFT_UI* ui, uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
+                           const char* filename, ButtonCallback callback) {
+    _tft = tft;
+    _ui = ui; 
+    _x = x; 
+    _y = y; 
+    _w = w; 
+    _h = h; 
+    _filename = filename; 
+    _action = callback;
+}
+
+void TFT_ImageButton::draw() {
+    if (!_tft) return;
+    
+    // Auto-Detect the file type based on the extension!
+    const char* dot = strrchr(_filename, '.');
+    
+    if (dot != nullptr && (dot[1] == 'r' || dot[1] == 'R') && (dot[2] == 'a' || dot[2] == 'A') && (dot[3] == 'w' || dot[3] == 'W')) {
+        // It's a custom RAW file! Pass the width and height.
+        _tft->drawRAW(_filename, _x, _y, _w, _h);
+    } else {
+        // Assume standard BMP format
+        _tft->drawBMP(_filename, _x, _y);
+    }
+}
+
+bool TFT_ImageButton::checkTouch(uint16_t tx, uint16_t ty) {
+    // Check the invisible Hitbox dimensions
+    if (tx >= _x && tx <= (_x + _w) && ty >= _y && ty <= (_y + _h)) {
+        
+        if (millis() - _lastPressTime > 300) { 
+            _lastPressTime = millis();
+            
+            // Tactile Feedback: Draw a fast white box around the image!
+            if (_ui) {
+                _ui->drawRect(_x, _y, _w, _h, TFT_WHITE);
+                _ui->drawRect(_x + 1, _y + 1, _w - 2, _h - 2, TFT_WHITE); // Double thickness
+                
+                delay(80); 
+                
+                // Redraw the image to erase the white box
+                draw(); 
+            }
+            
+            // Execute the attached function
+            if (_action) {
+                _action(); 
+            }
+            return true;
+        }
+    } 
     return false;
 }
