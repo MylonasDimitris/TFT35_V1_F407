@@ -516,3 +516,7 @@ bool TFT_ImageButton::checkTouch(uint16_t tx, uint16_t ty) {
     } 
     return false;
 }
+
+SdFat& TFT35_V1_F407::getSD() {
+    return sd;
+}

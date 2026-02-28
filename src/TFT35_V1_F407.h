@@ -46,6 +46,8 @@ public:
     bool isTouched();
     bool getTouchCoordinates(uint16_t *x, uint16_t *y);
     void lockTouch(uint16_t milliseconds);
+    
+    SdFat& getSD();
 
 private:
     void initFSMC();
