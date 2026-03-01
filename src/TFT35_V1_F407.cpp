@@ -378,7 +378,7 @@ bool TFT35_V1_F407::drawRAW(const char* filename, int16_t x, int16_t y, int16_t 
     return true;
 }
 
-void TFT35_V1_F407::drawRAWTransparent(const char* filename, int16_t x, int16_t y, int16_t w, int16_t h, uint16_t chromaKey) {
+bool TFT35_V1_F407::drawRAWTransparent(const char* filename, int16_t x, int16_t y, int16_t w, int16_t h, uint16_t chromaKey) {
     File rawFile = sd.open(filename, O_READ);
     if (!rawFile) return;
 
