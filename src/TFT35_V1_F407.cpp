@@ -380,3 +380,62 @@ bool TFT35_V1_F407::drawRAW(const char* filename, int16_t x, int16_t y, int16_t 
     rawFile.close();
     return true;
 }
+uint16_t TFT35_V1_F407::getFiles(char fileList[][13], uint16_t maxFiles, const char* extensionFilter, bool sortAlphabetical) {
+    if (!sd.card()) return 0; // Safety check if SD failed
+
+    File dir = sd.open("/");
+    if (!dir) return 0;
+
+    File file;
+    uint16_t count = 0;
+    
+    String filter = "";
+    if (extensionFilter != nullptr) {
+        filter = String(extensionFilter);
+        filter.toUpperCase();
+    }
+
+    // 1. Scan and Filter
+    while (file.openNext(&dir, O_READ)) {
+        if (!file.isDir()) {
+            char name[13];
+            file.getName(name, 13);
+            
+            bool match = true;
+            if (filter.length() > 0) {
+                String n = String(name);
+                n.toUpperCase();
+                if (!n.endsWith(filter)) {
+                    match = false;
+                }
+            }
+            
+            if (match) {
+                strncpy(fileList[count], name, 13);
+                count++;
+                if (count >= maxFiles) {
+                    file.close();
+                    break; // Stop if we hit array limit
+                }
+            }
+        }
+        file.close();
+    }
+    dir.close();
+
+    // 2. Alphabetical Bubble Sort
+    if (sortAlphabetical && count > 1) {
+        for (uint16_t i = 0; i < count - 1; i++) {
+            for (uint16_t j = i + 1; j < count; j++) {
+                if (strcmp(fileList[i], fileList[j]) > 0) {
+                    char temp[13];
+                    strcpy(temp, fileList[i]);
+                    strcpy(fileList[i], fileList[j]);
+                    strcpy(fileList[j], temp);
+                }
+            }
+        }
+    }
+    
+    return count;
+}

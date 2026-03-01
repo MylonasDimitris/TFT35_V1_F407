@@ -67,7 +67,7 @@ class TFT_ImageButton {
 public:
     TFT_ImageButton();
     
-    // Notice we pass the raw hardware driver (tft) so it can access the SD card!
+    //We pass the raw hardware driver (tft) so it can access the SD card
     void init(TFT35_V1_F407* tft, TFT_UI* ui, uint16_t x, uint16_t y, uint16_t w, uint16_t h, 
               const char* filename, ButtonCallback callback);
               

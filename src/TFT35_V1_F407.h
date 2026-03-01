@@ -48,6 +48,7 @@ public:
     void lockTouch(uint16_t milliseconds);
     
     SdFat& getSD();
+    uint16_t getFiles(char fileList[][13], uint16_t maxFiles, const char* extensionFilter = nullptr, bool sortAlphabetical = true);
 
 private:
     void initFSMC();

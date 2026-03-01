@@ -433,7 +433,7 @@ bool TFT_ProgressBar::checkTouch(uint16_t touchX, uint16_t touchY) {
     // Basic hit-box (with +20px fat finger allowance)
     bool inBounds = (touchX >= _x && touchX <= (_x + _w) && touchY >= (_y - 20) && touchY <= (_y + _h + 20));
     
-    // DRAG LOCK: If touched inside, OR if we were just dragging it 150ms ago, lock on!
+    // DRAG LOCK: If touched inside, OR if we were just dragging it 150ms ago, lock on
     if (inBounds || (millis() - _lastTouchTime < 150)) {
         
         // Debounce the physical hardware action, but allow the visual drag to be instant
@@ -450,7 +450,7 @@ bool TFT_ProgressBar::checkTouch(uint16_t touchX, uint16_t touchY) {
         if (_action != nullptr && shouldTriggerAction) {
             _action();
         }
-        return true; // We consume the touch!
+        return true;
     }
     return false;
 }
