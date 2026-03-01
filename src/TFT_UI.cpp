@@ -277,6 +277,12 @@ bool TFT_Button::checkTouch(uint16_t tx, uint16_t ty) {
     } 
     return false;
 }
+void TFT_Button::setGeometry(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+    _x = x;
+    _y = y;
+    _w = w;
+    _h = h;
+}
 
 // ============================================================================
 // TOGGLE SWITCH IMPLEMENTATION
@@ -360,10 +366,14 @@ bool TFT_Toggle::checkTouch(uint16_t tx, uint16_t ty) {
     } 
     return false;
 }
+void TFT_Toggle::setGeometry(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+    _x = x;
+    _y = y;
+    _w = w;
+    _h = h;
+}
 
-// ============================================================================
-// INTERACTIVE PROGRESS BAR / SLIDER IMPLEMENTATION
-// ============================================================================
+
 
 TFT_ProgressBar::TFT_ProgressBar() { 
     _ui = nullptr; 
@@ -454,6 +464,12 @@ bool TFT_ProgressBar::checkTouch(uint16_t touchX, uint16_t touchY) {
     }
     return false;
 }
+void TFT_ProgressBar::setGeometry(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+    _x = x;
+    _y = y;
+    _w = w;
+    _h = h;
+}
 
 TFT_ImageButton::TFT_ImageButton() { 
     _tft = nullptr;
@@ -516,7 +532,89 @@ bool TFT_ImageButton::checkTouch(uint16_t tx, uint16_t ty) {
     } 
     return false;
 }
+void TFT_ImageButton::setGeometry(uint16_t x, uint16_t y, uint16_t w, uint16_t h) {
+    _x = x;
+    _y = y;
+    _w = w;
+    _h = h;
+}
 
 SdFat& TFT35_V1_F407::getSD() {
     return sd;
+}
+
+TFT_Grid::TFT_Grid() {
+    for(int i = 0; i < MAX_GRID_SLOTS; i++) {
+        _slots[i] = nullptr;
+    }
+}
+
+void TFT_Grid::init(uint16_t startX, uint16_t startY, uint16_t w, uint16_t h, 
+                    uint8_t cols, uint8_t rows, uint8_t padding) {
+    _x = startX;
+    _y = startY;
+    _w = w;
+    _h = h;
+    _cols = cols;
+    _rows = rows;
+    _padding = padding;
+    
+    _btnW = (_w - (_padding * (_cols + 1))) / _cols;
+    _btnH = (_h - (_padding * (_rows + 1))) / _rows;
+    
+    for(int i = 0; i < MAX_GRID_SLOTS; i++) {
+        _slots[i] = nullptr;
+    }
+}
+
+bool TFT_Grid::assignWidget(uint8_t slotIndex, TFT_Widget* widget, uint8_t colSpan, uint8_t rowSpan) {
+    if (slotIndex >= MAX_GRID_SLOTS || slotIndex >= (_cols * _rows)) return false;
+    
+    //Calculate the starting Row and Col
+    uint8_t row = slotIndex / _cols;
+    uint8_t col = slotIndex % _cols;
+    
+    if (col + colSpan > _cols || row + rowSpan > _rows) return false;
+    
+    //Calculate the Top-Left starting pixel
+    uint16_t calcX = _x + _padding + (col * (_btnW + _padding));
+    uint16_t calcY = _y + _padding + (row * (_btnH + _padding));
+    
+    //Calculate the Spanned Width and Height (Includes the padding between spanned cells)
+    uint16_t spanW = (_btnW * colSpan) + (_padding * (colSpan - 1));
+    uint16_t spanH = (_btnH * rowSpan) + (_padding * (rowSpan - 1));
+    
+    //Apply the expanded geometry to the widget
+    widget->setGeometry(calcX, calcY, spanW, spanH);
+    
+    //Assign to the primary slot
+    _slots[slotIndex] = widget;
+    
+    return true;
+}
+
+void TFT_Grid::clearSlot(uint8_t slotIndex) {
+    if (slotIndex < MAX_GRID_SLOTS) {
+        _slots[slotIndex] = nullptr;
+    }
+}
+
+void TFT_Grid::draw() {
+    for(int i = 0; i < (_cols * _rows); i++) {
+        if (_slots[i] != nullptr) {
+            _slots[i]->draw();
+        }
+    }
+}
+
+bool TFT_Grid::checkTouch(uint16_t touchX, uint16_t touchY) {
+    for(int i = 0; i < (_cols * _rows); i++) {
+        if (_slots[i] != nullptr) {
+            // If one button is touched, we return true and stop checking the rest
+            if (_slots[i]->checkTouch(touchX, touchY)) {
+                return true; 
+            }
+        }
+    }
+    return false;
 }
