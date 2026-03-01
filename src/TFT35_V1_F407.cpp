@@ -441,6 +441,4 @@ void TFT35_V1_F407::setBacklight(uint8_t brightness) {
     // PD12 and PD13 are hardware-mapped to TIM4 on the STM32F407VET6
     analogWrite(L_BL, brightness);
     
-    // Some versions of this board use both pins for dual LED strips
-    analogWrite(L_BL_ALT, brightness); 
 }
