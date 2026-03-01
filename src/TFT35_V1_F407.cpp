@@ -377,6 +377,30 @@ bool TFT35_V1_F407::drawRAW(const char* filename, int16_t x, int16_t y, int16_t 
     rawFile.close();
     return true;
 }
+
+void TFT35_V1_F407::drawRAWTransparent(const char* filename, int16_t x, int16_t y, int16_t w, int16_t h, uint16_t chromaKey) {
+    File rawFile = sd.open(filename, O_READ);
+    if (!rawFile) return;
+
+    uint8_t buf[512]; 
+    int16_t curX = 0, curY = 0;
+
+    while (rawFile.available()) {
+        int bytesRead = rawFile.read(buf, 512);
+        for (int i = 0; i < bytesRead; i += 2) {
+            uint16_t color = buf[i] | (buf[i+1] << 8);
+            
+            if (color != chromaKey) {
+                setWindow(x + curX, y + curY, x + curX, y + curY);
+                LCD_DAT = color;
+            }
+
+            if (++curX >= w) { curX = 0; curY++; }
+        }
+    }
+    rawFile.close();
+}
+
 uint16_t TFT35_V1_F407::getFiles(char fileList[][13], uint16_t maxFiles, const char* extensionFilter, bool sortAlphabetical) {
     if (!sd.card()) return 0; // Safety check if SD failed
 

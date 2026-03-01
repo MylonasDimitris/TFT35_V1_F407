@@ -101,6 +101,24 @@ public:
     bool drawRAW(const char* filename, int16_t x, int16_t y, int16_t w, int16_t h);
 
     /**
+     * @brief Draws a 16-bit RAW RGB565 image with transparency (Chroma Key).
+     * * This function reads a .raw file and draws it to the screen at the specified 
+     * coordinates. If a pixel's color matches the 'chromaKey' value, that pixel 
+     * is skipped, allowing the previously drawn background to remain visible.
+     * * @note This is significantly slower than standard drawRAW() because it 
+     * cannot use bulk FSMC/DMA transfers; it must verify and set the LCD 
+     * window for every individual non-transparent pixel.
+     * * @param filename Path to the .raw file on the SD card (8.3 format).
+     * @param x Starting X coordinate on the display.
+     * @param y Starting Y coordinate on the display.
+     * @param w Width of the image in pixels.
+     * @param h Height of the image in pixels.
+     * @param chromaKey The 16-bit RGB565 color to treat as transparent.
+     * @return true if the file was opened and processed successfully.
+     */
+    bool drawRAWTransparent(const char* filename, int16_t x, int16_t y, int16_t w, int16_t h, uint16_t chromaKey);
+
+    /**
      * @brief Configures the SPI pins and IRQ for the XPT2046 touch controller.
      */
     void initTouch();
