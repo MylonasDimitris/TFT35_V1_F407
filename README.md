@@ -22,7 +22,8 @@ Typical SWD wiring:
 
 > Keep wires short and confirm logic voltage before powering the board.
 
-![ST-Link wiring placeholder](docs/images/stlink-wiring-placeholder.png)
+![1000118710](https://github.com/user-attachments/assets/e4209efb-1dcd-424d-a97f-f68a86cb35ce)
+
 
 ## Video demo
 
