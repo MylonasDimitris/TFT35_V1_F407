@@ -380,7 +380,7 @@ bool TFT35_V1_F407::drawRAW(const char* filename, int16_t x, int16_t y, int16_t 
 
 bool TFT35_V1_F407::drawRAWTransparent(const char* filename, int16_t x, int16_t y, int16_t w, int16_t h, uint16_t chromaKey) {
     File rawFile = sd.open(filename, O_READ);
-    if (!rawFile) return;
+    if (!rawFile) return false;
 
     uint8_t buf[512]; 
     int16_t curX = 0, curY = 0;
@@ -399,6 +399,7 @@ bool TFT35_V1_F407::drawRAWTransparent(const char* filename, int16_t x, int16_t 
         }
     }
     rawFile.close();
+    return true;
 }
 
 uint16_t TFT35_V1_F407::getFiles(char fileList[][13], uint16_t maxFiles, const char* extensionFilter, bool sortAlphabetical) {
