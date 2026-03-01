@@ -49,6 +49,12 @@ public:
     void setWindow(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2);
 
     /**
+     * @brief Sets the display backlight brightness via hardware PWM.
+     * @param brightness Value from 0 (completely off) to 255 (full brightness).
+     */
+    void setBacklight(uint8_t brightness);
+
+    /**
      * @brief Fills the entire screen with a single solid color.
      * @param color 16-bit RGB565 color.
      */
