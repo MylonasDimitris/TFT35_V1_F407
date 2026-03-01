@@ -10,8 +10,7 @@
 #define LCD_DAT (*((volatile uint16_t *) 0x61000000))
 
 // --- PIN DEFINITIONS ---
-#define L_BL     PD12 
-#define L_BL_ALT PD13 
+#define L_BL     PD13
 #define SD_CS    PA4
 
 // --- TOUCH PANEL PINS ---

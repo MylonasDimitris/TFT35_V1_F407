@@ -17,9 +17,6 @@ void TFT35_V1_F407::begin() {
     pinMode(L_BL, OUTPUT);     
     digitalWrite(L_BL, HIGH);
     
-    pinMode(L_BL_ALT, OUTPUT); 
-    digitalWrite(L_BL_ALT, HIGH);
-    
     initLCD();
 }
 

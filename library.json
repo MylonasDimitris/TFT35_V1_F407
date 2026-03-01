@@ -1,0 +1,28 @@
+{
+  "name": "TFT35_V1_F407",
+  "version": "1.0.0",
+  "description": "Professional HMI framework for integrated STM32F407VET6 TFT modules. Optimized with FSMC memory-mapping and DMA video pipelines.",
+  "keywords": "display, stm32, fsmc, dma, tft, ui, widgets, reverse-engineered, xpt2046",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MylonasDimitris/TFT35_V1_F407.git"
+  },
+  "authors": [
+    {
+      "name": "Mylonas Dimitris",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "frameworks": "arduino",
+  "platforms": "ststm32",
+  "dependencies": {
+    "greiman/SdFat": "^2.2.2"
+  },
+  "examples": "examples/*/*.ino",
+  "build": {
+    "flags": [
+      "-D STM32F407xx"
+    ]
+  }
+}

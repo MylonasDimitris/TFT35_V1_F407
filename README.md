@@ -1,72 +1,104 @@
-# TFT35_V1_F407 UI & Graphics Library
+# TFT35_V1_F407
+
+**Keywords:** #STM32F407 #FSMC #TFT-LCD #Reverse-Engineering #HMI
 
 ![Status: WIP](https://img.shields.io/badge/Status-Work_In_Progress-orange?style=flat-square)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 
-> **Note:** This library is currently a **Work In Progress**. The core hardware drivers (FSMC/DMA) and UI widgets are functional, but documentation and additional examples are still being added.
+High-performance graphics and UI framework for a **closed-source TFT35 V1.0 touchscreen module** (onboard **STM32F407VET6**) recovered from older 3D printer hardware.
 
-A high-performance graphics and UI framework for STM32F407VET6 microcontrollers driving 3.5" TFT displays (ILI9486/ILI9488). The library utilizes hardware-level optimizations including **FSMC (Flexible Static Memory Controller)** and **DMA (Direct Memory Access)** to achieve high-speed rendering and fluid video playback.
+This project was developed through practical reverse engineering (board tracing + multimeter probing) and focuses on deterministic rendering, responsive touch input, and SD-based media playback.
 
----
+## Hardware flashing / connection (ST-Link)
 
-## Technical Architecture
+Program the board through the **back-side SWD pins** using an ST-Link.
 
-### Hardware Interfacing (FSMC)
-This library treats the display as an external memory bank. By using the STM32 FSMC, the LCD is mapped directly to the CPU's address space. This bypasses slow GPIO toggling, allowing the hardware to handle the timing signals for the 16-bit parallel bus.
-* **Register Address:** `0x60000000` (RS Pin Low)
-* **Data Address:** `0x61000000` (RS Pin High)
+Typical SWD wiring:
+- `3V3`
+- `GND`
+- `SWDIO`
+- `SWCLK`
+- `RST` (recommended)
 
+> Keep wires short and confirm logic voltage before powering the board.
 
+![ST-Link wiring placeholder](docs/images/stlink-wiring-placeholder.png)
 
-### Memory Management & DMA
-For video and heavy graphical updates, the library implements a dual-buffered DMA2 pipeline. This allows the CPU to decode frame data into one buffer while the DMA controller simultaneously pushes the second buffer to the display, eliminating screen tearing and reducing CPU load during playback.
+## Video demo
 
----
+![Video playback GIF placeholder](docs/gifs/video-playback-demo.gif)
 
-## Features
+## Hardware Pin Map (Reverse Engineered)
 
-* **Graphics Engine:** Optimized implementations of Bresenham's line and circle algorithms.
-* **UI Component System:** * **TFT_Button & TFT_Toggle:** Interactive widgets with customizable colors, labels, and font scaling.
-    * **TFT_ProgressBar:** Smooth-drag slider with coordinate-to-value mapping and input debouncing.
-    * **TFT_ImageButton:** Support for standard 24-bit `.BMP` and high-speed custom 16-bit `.RAW` assets.
-* **Media Decoders:** * **RAW Decoder:** Direct file-to-FSMC streaming for high-speed UI assets.
-    * **Video Player:** 8-bit indexed color playback with dynamic palette updates and sync-marker verification.
-* **Touch Interface:** Calibrated touch driver with noise-filtering and "Lift-off Drift" protection to ensure clean input data.
+| Subsystem | Interface | Discovered Mapping |
+| :-- | :-- | :-- |
+| LCD | 16-bit FSMC | Reg: `0x60000000`, Data: `0x61000000` |
+| Touch (XPT2046) | Bit-banged SPI | `SCK=PC6`, `CS=PC7`, `MOSI=PC8`, `MISO=PC9`, `IRQ=PA8` |
+| SD Card | SPI1 | `CS=PA4` |
+| Backlight | GPIO / PWM capable | `PD13` |
 
----
+## Why this library is strong
 
-## Wiring Configuration
+- **Hardware Abstraction with direct-register throughput**
+    - Clean class API on top of low-level FSMC/DMA/touch/SD control.
+    - Optimized for the TFT35 V1.0 integrated module.
 
-| Component | TFT Pin | STM32 Pin | Function |
-| :--- | :--- | :--- | :--- |
-| **LCD Data** | D0 - D15 | PD/PE (various) | 16-bit Parallel Bus |
-| **Control** | RS / WR / RD | PD11 / PD5 / PD4 | FSMC Control Lines |
-| **Touch** | CS / SCK / DIN / DOUT | PC7 / PC6 / PC8 / PC9 | Bit-banged SPI |
-| **Touch IRQ** | IRQ | PA8 | External Interrupt |
-| **SD Card** | CS | PA4 | SPI Chip Select |
+- **Asynchronous Pipelines for media rendering**
+    - Palette decode and LCD transfer are organized as a double-buffered DMA workflow.
+    - Supports indexed `.BIN` playback from SD with block-based frame processing.
 
+- **Deterministic UI Layout and interaction model**
+    - Shared widget contracts (`draw`, `checkTouch`, `setGeometry`) keep behavior predictable.
+    - Grid-driven placement reduces manual pixel math in larger interfaces.
 
+- **Production-oriented graphics primitives**
+    - Fast rectangle fills, line/circle primitives, text renderer, and RGB565 conversion.
 
----
+## Advanced Grid Layout System
 
-## Setup & Usage
+`TFT_Grid` acts as a **Dynamic Layout Manager** for UI composition on fixed-resolution TFT screens.
 
-### 1. Requirements
-* **Hardware:** STM32F407VET6 Development Board.
-* **Libraries:** [SdFat](https://github.com/greiman/SdFat) (required for high-speed SD access).
-* **Python:** 3.x with `OpenCV`, `NumPy`, and `Pillow` for media conversion.
+- **Automatic row/column coordinate calculation**
+    - Computes cell geometry from grid bounds, rows/cols, and padding.
 
-### 2. Media Preparation
-Use the included Python scripts in the `/extras` directory to prepare assets for the SD card:
+- **Widget spanning (`colSpan`, `rowSpan`)**
+    - A widget can occupy multiple cells horizontally/vertically.
+    - Span bounds are validated before assignment.
 
-```bash
-# Convert image to optimized RAW format
-python image_converter.py input.png -o ICON.RAW --size 100 100
+- **Padding/margin style spacing management**
+    - Inter-cell spacing is handled through grid padding.
+    - Spanned dimensions include internal spacing for consistent alignment.
 
-# Convert video to DMA-ready binary format
-python video_converter.py input.mp4 -o TEST.BIN --fps 15
-```
-### 3. Example Implementation
+## Performance & Concurrency
+
+- **Memory-Mapped I/O (FSMC)**
+    - LCD writes are done through mapped register/data addresses, effectively treating the panel bus as high-speed external memory.
+
+- **Double-Buffered DMA (DMA2)**
+    - Color blocks are expanded into alternating RGB565 buffers and transferred with DMA, reducing CPU stall during frame output.
+
+- **Bus Yield Strategy for touch responsiveness**
+    - The touch stack uses controlled micro-delays in XPT2046 bit-banged transactions for stable sampling.
+    - Video playback is processed in fixed line blocks (frame-loop counters via `LINES_PER_BLOCK`), enabling predictable scheduling points for touch polling between frame updates.
+
+## Software Architecture
+
+The UI is built around **polymorphism** through the `TFT_Widget` base class:
+
+- `draw()`
+- `checkTouch(uint16_t tx, uint16_t ty)`
+- `setGeometry(uint16_t x, uint16_t y, uint16_t w, uint16_t h)`
+
+This keeps the system extensible and allows different controls (`TFT_Button`, `TFT_Toggle`, `TFT_ProgressBar`, `TFT_ImageButton`) to be managed uniformly by containers such as `TFT_Grid`.
+
+## Requirements
+
+- TFT35 V1.0 touchscreen unit with onboard STM32F407VET6
+- Arduino core for STM32
+- [SdFat](https://github.com/greiman/SdFat)
+- (Optional) Python 3 for media conversion tools
+
+## Quick start
 
 ```cpp
 #include <TFT35_V1_F407.h>
@@ -74,35 +106,100 @@ python video_converter.py input.mp4 -o TEST.BIN --fps 15
 
 TFT35_V1_F407 tft;
 TFT_UI ui(&tft);
-TFT_Button myButton;
+TFT_Button btn;
 
-// 1. Define the callback function
-void handleStartPress() {
-    Serial.println("Button Pressed: START");
+void onPress() {
+        // Called when the button receives a valid touch event
+        Serial.println("Pressed");
 }
 
 void setup() {
-    Serial.begin(115200); // Initialize Serial communication
-    
-    tft.begin();
-    tft.initTouch();
-    tft.initSD();
+        // Serial output for debug/logging
+        Serial.begin(115200);
 
-    // 2. Pass 'handleStartPress' instead of 'nullptr'
-    myButton.init(&ui, 50, 50, 160, 60, TFT_BLUE, TFT_WHITE, "START", 2, handleStartPress);
-    myButton.draw();
+        // Initialize LCD/FSMC backend
+        tft.begin();
+
+        // Initialize touch controller (XPT2046)
+        tft.initTouch();
+
+        // Build and render one basic button widget
+        btn.init(&ui, 40, 40, 140, 50, TFT_BLUE, TFT_WHITE, "START", 2, onPress);
+        btn.draw();
 }
 
 void loop() {
-    uint16_t x, y;
-    if (tft.getTouchCoordinates(&x, &y)) {
-        // 3. checkTouch will now trigger handleStartPress() automatically
-        myButton.checkTouch(x, y);
-    }
+        uint16_t x, y;
+
+        // Poll touch and dispatch to widget logic
+        if (tft.getTouchCoordinates(&x, &y)) {
+                btn.checkTouch(x, y);
+        }
 }
 ```
-## Directory Structure
 
-* **/src**: Library source code (`.h` and `.cpp`).
-* **/examples**: Pre-configured `.ino` sketches for basic setup, video playback, and UI testing.
-* **/tools**: Python-based media conversion toolchain.
+## Media tools
+
+Use scripts in `tools/` to prepare SD-ready assets.
+
+When to use each tool:
+
+- `image_converter.py`
+    - Convert PNG/JPG into `.RAW` RGB565 for fast static UI assets.
+
+- `video_converter.py`
+    - Convert videos into indexed `.BIN` streams for `openVideo()` + `playFrame()`.
+
+- `bin_preview.py`
+    - Preview `.BIN` output on desktop before copying to SD.
+
+Typical workflow:
+1. Convert source media on your PC.
+2. Copy generated files to the SD card.
+3. Call `tft.initSD()` in `setup()`.
+4. Render using `drawRAW()` / `drawBMP()` or play via `openVideo()` + `playFrame()`.
+
+Commands:
+
+```bash
+# Convert image to RGB565 RAW
+python tools/image_converter.py input.png -o ICON.RAW --size 100 100
+
+# Convert video to indexed BIN stream
+python tools/video_converter.py input.mp4 -o TEST.BIN --fps 15
+
+# Optional desktop preview
+python tools/bin_preview.py TEST.BIN
+```
+
+Video playback snippet (minimal):
+
+```cpp
+#include <TFT35_V1_F407.h>
+
+TFT35_V1_F407 tft;
+
+void setup() {
+        tft.begin();
+        tft.initSD();
+
+        // Open SD video file (8.3 filename format)
+        tft.openVideo("TEST.BIN");
+}
+
+void loop() {
+        // Push one frame per call; reopen when stream ends
+        if (!tft.playFrame()) {
+                tft.openVideo("TEST.BIN");
+        }
+}
+```
+
+## Project layout
+
+- `src/` -> library source
+- `tools/` -> Python conversion utilities
+
+## Notes
+
+This project is still **Work In Progress**, but the core hardware driver, graphics stack, touch input, and UI system are functional.
